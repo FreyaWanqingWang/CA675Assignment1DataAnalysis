@@ -1,0 +1,25 @@
+PostsData = LOAD 'hdfs://cluster-575c-m/assignment/QueryResultsAll.csv' using PigStorage(',') as (Id:int,Score:int,ViewCount:int,Title:chararray,Body:chararray,OwnerUserId:int);
+ScoreDesc = RANK PostsData by Score DESC;
+Top10Score = LIMIT ScoreDesc 10;
+Top10ScoreExcludeBody = FOREACH Top10Score GENERATE Id as Id, Score as Score, ViewCount as ViewCount, OwnerUserId as OwnerUserId, Title as Title;
+DUMP Top10ScoreExcludeBody;
+
+ExcludeEmptyUser = FILTER PostsData BY OwnerUserId is not null;
+GroupUser = GROUP ExcludeEmptyUser BY OwnerUserId;
+GroupUserSum = FOREACH GroupUser GENERATE group as OwnerUserId, SUM(ExcludeEmptyUser.Score) as TotalScore; 
+TotalScoreRank = RANK GroupUserSum by TotalScore DESC;
+Top10TotalScore = LIMIT TotalScoreRank 10;
+DUMP Top10TotalScore;
+
+PostsHaveCloud = FILTER PostsData BY (Body matches '.*cloud.*');
+GroupUser2 = GROUP PostsHaveCloud BY OwnerUserId;
+GroupUser2_All = GROUP GroupUser2 ALL;
+GroupUser2Count = FOREACH GroupUser2_All GENERATE COUNT(GroupUser2) as sum;
+DUMP GroupUser2Count;
+
+REGISTER 'hdfs://cluster-575c-m/assignment/udf_cal_tfidf.py' using org.apache.pig.scripting.jython.JythonScriptEngine AS my_udf;
+PostsData = LOAD 'hdfs://cluster-575c-m/assignment/QueryResultsAll.csv' using PigStorage(',') as (Id:int,Score:int,ViewCount:int,Title:chararray,Body:chararray,OwnerUserId:int);
+PostsDataTop10 = FILTER PostsData BY OwnerUserId IN (87234,4883,9951,6068,89904,51816,49153,179736,95592,63051);
+PostsDataTop10Group = GROUP PostsDataTop10 BY OwnerUserId;
+TFIDF_Result = FOREACH PostsDataTop10Group GENERATE my_udf.Cal_TFIDF(PostsDataTop10.Body);
+dump TFIDF_Result;
